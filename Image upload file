@@ -1,0 +1,264 @@
+NOTE: STORE IMAGE IN THE RESOURCES\STATIC\IMAGES FOLDER OF SPRING APP
+Entity
+------------------------------------------------------------
+package com.example.uplaodImage.testImage;
+
+import jakarta.persistence.*;
+
+@Entity
+public class ImageEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private String fileName;
+
+    @Column(nullable = false)
+    private String filePath;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column
+    private String description;
+
+    @Column
+    private String uploadedBy;
+
+    @Column
+    private String uploadDate;
+
+    // Getters and Setters
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public String getFilePath() {
+        return filePath;
+    }
+
+    public void setFilePath(String filePath) {
+        this.filePath = filePath;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(String uploadedBy) {
+        this.uploadedBy = uploadedBy;
+    }
+
+    public String getUploadDate() {
+        return uploadDate;
+    }
+
+    public void setUploadDate(String uploadDate) {
+        this.uploadDate = uploadDate;
+    }
+}
+
+
+
+
+
+DTO
+------------------------------------------------------------------
+package com.example.uplaodImage.testImage;
+
+public class ImageDto {
+    private String title;
+    private String description;
+    private String uploadedBy;
+    private String uploadDate;
+
+    // Getters and Setters
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(String uploadedBy) {
+        this.uploadedBy = uploadedBy;
+    }
+
+    public String getUploadDate() {
+        return uploadDate;
+    }
+
+    public void setUploadDate(String uploadDate) {
+        this.uploadDate = uploadDate;
+    }
+}
+
+
+
+
+Repository
+-------------------------------------------------------------------
+package com.example.uplaodImage.testImage;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ImageRepository extends JpaRepository<ImageEntity, Long> {
+}
+
+
+
+Service
+-------------------------------------------------------------------
+package com.example.uplaodImage.testImage;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+@Service
+public class ImageService {
+
+	@Value("${file.upload-dir}")
+	private String uploadDir;
+
+	@Autowired
+	ImageRepository imageRepository;
+
+	public ImageEntity uploadImage(MultipartFile file, String title, String description, String uploadedBy,
+			String uploadDate) throws IOException {
+		// Create directory if it doesn't exist
+		File directory = new File(uploadDir);
+		if (!directory.exists()) {
+			directory.mkdirs();
+		}
+
+		// Save file to server
+		String fileName = file.getOriginalFilename();
+		Path filePath = Paths.get(uploadDir, fileName);
+		Files.write(filePath, file.getBytes());
+
+		// Save file info and metadata to the database
+		ImageEntity imageEntity = new ImageEntity();
+		imageEntity.setFileName(fileName);
+		imageEntity.setFilePath(filePath.toString());
+		imageEntity.setTitle(title);
+		imageEntity.setDescription(description);
+		imageEntity.setUploadedBy(uploadedBy);
+		imageEntity.setUploadDate(uploadDate);
+
+		return imageRepository.save(imageEntity);
+	}
+}
+
+
+
+
+Controller
+----------------------------------------------------------------
+package com.example.uplaodImage.testImage;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+@RestController
+public class ImageController {
+
+	@Autowired
+	ImageService imageService;
+
+	@PostMapping("/upload-image")
+	public ResponseEntity<ImageEntity> uploadImage(@RequestParam("file") MultipartFile file,
+			@RequestParam("data") String data) {
+		try {
+			// Convert JSON string to ImageUploadRequest object
+			ObjectMapper objectMapper = new ObjectMapper();
+			ImageDto uploadRequest = objectMapper.readValue(data, ImageDto.class);
+
+			// Call the service to handle the upload
+			ImageEntity imageEntity = imageService.uploadImage(file, uploadRequest.getTitle(),
+					uploadRequest.getDescription(), uploadRequest.getUploadedBy(), uploadRequest.getUploadDate());
+
+			return ResponseEntity.ok(imageEntity);
+		} catch (Exception e) {
+			return ResponseEntity.status(500).body(null);
+		}
+	}
+}
+
+
+
+
+
+Testing in Postman
+--------------------------------------------------------------------
+Form-Data:
+file (Type: File) â†’ Upload an image file.
+data (Type: Text) â†’ JSON string of metadata.
+{
+  "title": "Sample Image",
+  "description": "This is a test image",
+  "uploadedBy": "John Doe",
+  "uploadDate": "2024-11-26"
+}
+
+
+application.properties
+--------------------------------------------------------------------------------
+# Folder path to save uploaded images
+
+file.upload-dir=uploads
