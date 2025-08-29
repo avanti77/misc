@@ -1,0 +1,95 @@
+services
+
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+
+@Service
+public class ProductService {
+
+    private final ProductRepository repo;
+    private final String uploadDir = "uploads/"; // folder relative to project root
+
+    public ProductService(ProductRepository repo) {
+        this.repo = repo;
+        new File(uploadDir).mkdirs(); // ensure uploads folder exists
+    }
+
+    public Product saveProduct(String name, Double price, MultipartFile file) throws IOException {
+        String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+        Path filePath = Paths.get(uploadDir, fileName);
+
+        file.transferTo(filePath.toFile()); // save file directly
+
+        Product product = new Product();
+        product.setName(name);
+        product.setPrice(price);
+        product.setImagePath(fileName); // only save fileName
+        return repo.save(product);
+    }
+
+    public List<Product> getAllProducts() {
+        return repo.findAll();
+    }
+}
+
+controller
+
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/products")
+@CrossOrigin(origins = "http://localhost:4200") // allow Angular
+public class ProductController {
+
+    private final ProductService service;
+
+    public ProductController(ProductService service) {
+        this.service = service;
+    }
+
+    // ✅ Upload new product
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Product> addProduct(
+            @RequestParam("name") String name,
+            @RequestParam("price") Double price,
+            @RequestParam("image") MultipartFile file) throws IOException {
+
+        Product saved = service.saveProduct(name, price, file);
+        return ResponseEntity.ok(saved);
+    }
+
+    // ✅ Get all products
+    @GetMapping
+    public List<Product> getAllProducts() {
+        return service.getAllProducts();
+    }
+}
+
+
+web confih
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Serve files from "uploads/" folder
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:uploads/");
+    }
+}
